@@ -17,17 +17,40 @@ HttpSecurity可以添加以下的配置项
 *anonymous 可以设置匿名用户的权限之类
 *formLogin 设置登录界面、登陆成功/失败重定向地址、http请求数据中用户名和密码分别对应的字段名
 *saml2Login 关于SAML 2.0之类的，不懂
-*oauth2Login 想用这个功能需要加入spring-boot-starter-oauth2-client 
-    (1)tokenEndpoint:配置向Authorization Server获取Token的RestTemplate，对于oauth2的四种模式，spring security相应的给出了一些RestTemplate
-    (2)redirectionEndpoint:配置Client的重定向地址
-    (3)authorizationEndpoint:配置Authorization Server的认证端点
-    (4)userInfoEndpoint:配置Authorization Server提供个人用户信息的端点
-*oauth2Client 想用这个功能需要加入spring-boot-starter-oauth2-client
-    (1)authorizedClientRepository
-    (2)authorizedClientService:会覆盖authorizedClientRepository的配置
-    (3)clientRegistrationRepository
-    (4)authorizationCodeGrant
 
+oauth2所谓的四种类型，说的都是从Authorization Server获取token的方式，获取到token后的操作都一样
+我们开发的系统扮演的是Client的角色，
+
+oauth2授权码模式的步骤：
+1.User访问Client，Client给出一个页面，页面上列举了几种第三方的认证服务，例如google，github等
+2.User点击了其中一个认证服务的图标，比如github，这个图标是个<a>标签，它的href属性为
+"https://oauth.github.com/oauth/authorize?response_type=code&client_id=CLIENT_ID&redirect_uri=CALLBACK_URL1&scope=read",
+所以点击之后浏览器就向这个地址发去了请求，然后收到了一个页面，这个页面中有用户名和密码的输入框
+3.User输入自己的用户名和密码，点击登录，然后浏览器页面出现了一些提示信息，询问User是否同意授予XXX获取XXX数据的权限
+4.用户点确定按钮，浏览器向oauth.github.com发送提交“确定”这一信息。oauth.github.com收到确定信息之后，返回一个redirect响应，这个响应的Location头是这样的：
+Location：CALLBACK_URL1?code=1238912
+CALLBACK_URL1是Client自己指定的，在第2步发给了oauth.github.com
+5.浏览器收到oauth.github.com的redirect响应，向"CALLBACK_URL1?code=1238912"这一地址也就是Client发起请求，Client就拿到了code，此时可以给前端返回页面，也可以先不返回，让用户稍等一下
+6.Client在后台拿着code向oauth.github.com发送一个GET请求，url为
+"https://oauth.github.com/oauth/token?client_id=CLIENT_ID&client_secret=CLIENT_SECRET&grant_type=authorization_code&code=1238912&redirect_uri=CALLBACK_URL2"
+7.oauth.github.com收到请求，直接让这个http请求先响应回去了，即仅返回一个200的状态
+8.oauth.github.com生成一个Token，发送给地址CALLBACK_URL2，此地址是在第6步Client告诉oauth.github.com的，至此Client就获取到了Access Token
+
+*oauth2Login 想用这个功能需要加入spring-boot-starter-oauth2-client 
+    (1)tokenEndpoint:这个端点指的是步骤6中Authorization Server负责接受”颁发token申请“的端点。 此配置项智能配置向Authorization Server获取Token的RestTemplate，对于oauth2的四种模式，spring security相应地给出了一些RestTemplate
+    (2)redirectionEndpoint:这个配置的意义有点特别，配置的是接收来自Authorization Server的token数据的，本地的端点，也就是步骤8中的CALLBACK_URL2
+    (3)authorizationEndpoint:这个端点指的Authorization Server上提供code的端点 配置与Authorization Server的认证端点有关的事。！！！！！！！！这个端点是不是在自己充当Authorization Server角色才用的？
+    (4)userInfoEndpoint:配置Authorization Server提供个人用户信息的端点，这个端点不是rfc6749中定义的，似乎是spring security在OICD方面的扩展
+    (5)loginPage:似乎又是作为Authorization Server才需要的，提供一个包含用户名密码输入框的页面
+    (6)loginProcessingUrl:同上，loginPage提交的用户名密码需要提交到此处？应该是对应于步骤4
+    
+(1)、(3)、(4)中的“endpoint”指的都是Authorization Server的，(2)的endpoint是自己的
+
+*oauth2Client 想用这个功能需要加入spring-boot-starter-oauth2-client，配置的是自己作为一个Client时需要用到的东西
+    (1)authorizedClientRepository
+    (2)authorizedClientService:会覆盖authorizedClientRepository的配置，这一项和上一项都是配置对于“authorized client”的管理
+    (3)clientRegistrationRepository：里边维护着本系统在其它各个Authorization Server上注册之后获得的clientId,clientSecret，比如在谷歌注册的、在github注册的等等
+    (4)authorizationCodeGrant：配置一些和Authorization Server交互有关的东西
 
 *oauth2ResourceServer 想用这个功能需要加入spring-boot-starter-oauth2-resource-server
     (1)bearerTokenResolver:所谓BearerToken就是“Authorization:Bearer xxxxxxxx”，此处就要要配置一个从http请求里取出”xxxxxxxx“部分的Resolver类
@@ -47,6 +70,7 @@ HttpSecurity可以添加以下的配置项
 *antMatcher
 *mvcMatcher
 *regexMatcher
+以上四个配置项都是用来设置HttpSecurity中一个名为requestMatcher的属性，四选一即可，否则后边的配置会覆盖前边的。而且前边在authorizeRequests里配置的路径也都会被覆盖。
 
 
 httpFirewall spring security会把一些请求判断为危险请求，然后把这类请求包装为FirewalledRequest
@@ -88,3 +112,4 @@ WebSecurity产出一个Filter，HttpSecurity产出一个DefaultSecurityFilterCha
 
 
 AuthenticationEntryPoint: 在ExceptionTranslationFilter捕捉到错误后，会把请求和响应对象放入authenticationEntryPoint内处理。所谓处理，其实也就是为响应对象添加一些“未认证”、“无权限”之类的Header，或者直接把请求转发至登录界面
+OAuth2AuthorizedClient：资源的正真所有者（用户），自己作为Client在Authentication Server处的身份信息，Authentication Server针对用户给自己的token，这三个要素的集合在组成了一个“被认证的客户端”

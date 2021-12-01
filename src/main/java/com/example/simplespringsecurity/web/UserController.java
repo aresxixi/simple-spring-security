@@ -2,6 +2,7 @@ package com.example.simplespringsecurity.web;
 
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.Collections;
 
 @RestController
@@ -15,7 +16,7 @@ public class UserController {
 
     @GetMapping("list")
     public Object listUser(){
-        return null;
+        return Arrays.asList("success", "success", "success", "success");
     }
 
     @PostMapping

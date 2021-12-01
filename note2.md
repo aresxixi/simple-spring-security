@@ -1,0 +1,3 @@
+在不指定UserDetailsService的情况下启动项目，会自动添加一个名为user的用户，密码会在控制台打印出来
+
+在formLogin配置项中，如果指定了loginPage，则配置permitAll(false)会报错；如果没有指定loginPage，则permitAll不起作用
